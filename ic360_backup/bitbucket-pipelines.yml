@@ -1,0 +1,49 @@
+image: amazon/aws-cli
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Publish IC360_MOODLE_BASE_FORKED Docker Image
+          runs-on:
+            - self.hosted
+            - linux
+          script:
+            - docker build -t $ECR_REPO_NAME:ic360-moodle-base-forked_${BITBUCKET_COMMIT} -f Dockerfile.base .
+            - docker tag $ECR_REPO_NAME:ic360-moodle-base-forked_${BITBUCKET_COMMIT} $ECR_REPO_NAME:ic360-moodle-base-forked_latest
+            - pipe: atlassian/aws-ecr-push-image:2.4.2
+              variables:
+                AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+                AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+                AWS_DEFAULT_REGION: $AWS_REGION
+                IMAGE_NAME: $ECR_REPO_NAME
+                TAGS: "ic360-moodle-base-forked_${BITBUCKET_COMMIT} ic360-moodle-base-forked_latest"
+          condition:
+            changesets:
+              includePaths:
+                - "Dockerfile.base"
+      - step: 
+          name: Publish IC360_MOODLE_WEB_FORKED Docker Image
+          runs-on:
+            - self.hosted
+            - linux
+          script:
+            - aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+            - aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+            - export AWS_REGION=${AWS_REGION}
+            - export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            - export GIT_COMMIT_DATE=$(git --no-pager log -1 --format=%cd --date=format:'%Y-%m-%dT%H:%M:%SZ')
+            - export GIT_COMMIT_HASH=${BITBUCKET_COMMIT}
+            - export GIT_COMMIT_MESSAGE=$(git --no-pager log -1 --pretty=%B | tr -d '\n' | tr -d '"' | tr -d "'" | sed -e 's/[&()@]//g')
+            - export GIT_BRANCH=${BITBUCKET_BRANCH}
+            - echo "docker build -t $ECR_REPO_NAME:ic360-moodle-web-forked_${BITBUCKET_COMMIT} -f Dockerfile.moodle ."
+            - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 863817130246.dkr.ecr.us-east-1.amazonaws.com
+            - docker build -t $ECR_REPO_NAME:ic360-moodle-web-forked_${BITBUCKET_COMMIT} -f Dockerfile.moodle .
+            - docker tag $ECR_REPO_NAME:ic360-moodle-web-forked_${BITBUCKET_COMMIT} $ECR_REPO_NAME:ic360-moodle-web-forked_latest
+            - pipe: atlassian/aws-ecr-push-image:2.4.2
+              variables:
+                AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+                AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+                AWS_DEFAULT_REGION: 'us-east-1'
+                IMAGE_NAME: $ECR_REPO_NAME
+                TAGS: "ic360-moodle-web-forked_${BITBUCKET_COMMIT} ic360-moodle-web-forked_latest"

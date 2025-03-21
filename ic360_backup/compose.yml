@@ -1,0 +1,57 @@
+services:
+  temp_moodle_web:
+    #image: 863817130246.dkr.ecr.us-east-1.amazonaws.com/repo-moodle:ic360-moodle-web_latest
+    image: moodle-web-nginx-test-prod:v1
+    container_name: temp_moodle_web
+    ports:
+      - "80"
+    volumes:
+      - ${PWD}/volumes/data/moodledata:/var/www/moodledata
+      - ${PWD}/.env:/var/www/html/.env
+    env_file:
+      - .env
+    depends_on:
+      - test_moodle_postgres
+    restart: always
+    networks:
+      - test_moodle_network
+      - caddy_nt_frontend
+
+  test_moodle_postgres:
+    image: postgres:17-alpine
+    container_name: test_moodle_db
+    env_file:
+      - .env
+    volumes:
+      - ${PWD}/volumes/data/pgdata:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - test_moodle_network
+
+
+  test_moodle_rediscache:
+    image: redis:alpine
+    container_name: test_moodle_redis
+    env_file:
+      - .env
+    command: >
+      redis-server 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru 
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+    ports:
+      - ${REDIS_PORT}
+    volumes:
+      - ${PWD}/volumes/data/redisdata:/data
+    restart: always
+    networks:
+      - test_moodle_network
+  
+networks:
+  test_moodle_network:
+    name: test_moodle_network
+    driver: bridge
+  caddy_nt_frontend:
+    name: caddy_nt_frontend
+    external: true  

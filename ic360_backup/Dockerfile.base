@@ -1,0 +1,105 @@
+# Build stage
+FROM php:8.3-fpm AS php-builder
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libzip-dev \
+        libjpeg-dev \
+        libpng-dev \
+        libfreetype6-dev \
+        libicu-dev \
+        libxml2-dev \
+        libpq-dev
+
+# Configure and install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    docker-php-ext-install -j$(nproc) \
+        mysqli \
+        zip \
+        gd \
+        intl \
+        soap \
+        exif \
+        pgsql \
+        pdo_pgsql \
+        opcache
+
+# Install Redis extension
+RUN pecl install redis && \
+    docker-php-ext-enable redis
+
+# Final stage
+FROM php:8.3-fpm
+
+# Copy PHP extensions from builder
+COPY --from=php-builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
+COPY --from=php-builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # Runtime libraries for PHP extensions
+        libpng16-16 \
+        libzip4 \
+        libfreetype6 \
+        libjpeg62-turbo \
+        libicu72 \
+        libxml2 \
+        libpq5 \
+        # Web server
+        nginx \
+        # Version control
+        git \
+        # Core utilities
+        curl \
+        ca-certificates \
+        unzip \
+        wget \
+        vim \
+        sudo \
+        # Database clients
+        postgresql-client \
+        redis-tools \
+        # Monitoring tools
+        htop \
+        procps \
+        tree \
+        # Network tools
+        net-tools \
+        telnet \
+        # System utilities
+        cron \
+        supervisor \
+        logrotate \
+        logwatch && \
+    # Cleanup
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Enable PHP extensions
+RUN docker-php-ext-enable \
+    mysqli \
+    zip \
+    gd \
+    intl \
+    soap \
+    exif \
+    pgsql \
+    pdo_pgsql \
+    opcache \
+    redis
+
+# Create required directories
+RUN mkdir -p \
+    /var/www/moodledata \
+    /var/www/html \
+    /var/log/supervisor \
+    /var/run/supervisor
+
+# Set volume and working directory
+#VOLUME ["/var/www/moodledata"]
+WORKDIR /var/www/html
+
+# Expose port
+EXPOSE 80
